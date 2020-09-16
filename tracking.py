@@ -797,7 +797,7 @@ def compute_matches(tracks, t, max_age,
   Returns:
       matches: A 1D np.ndarray with as many elements as boxes in current
       frame (cur_boxes). For each, there is an integer to index the previous
-      frame box that it matches to, or -1 if it doesnot match to any previous
+      frame box that it matches to, or -1 if it does not match to any previous
       box.
   """
   # If there are no tracks, just set everything as new tracks
@@ -840,21 +840,23 @@ def compute_matches(tracks, t, max_age,
       matches[next_inds[i]] = track_idx[prev_inds[i]]
   return matches
 
-def update_tracks(tracks, matches, t, all_boxes, all_keypoints):
-  """Updates the tracks for frame t given the matches, and creates new tracks when necessary.
+def update_tracks(tracks, matches, i, all_boxes, all_keypoints):
+  """Updates the tracks for frame i given the matches, and creates new tracks when necessary.
 
   Args:
   """
-  for i in range(len(matches)):
-    idx = matches[i]
+  
+  print('Matches {}'.format(matches))
+
+  for t in range(len(matches)):
+    idx = matches[t]
     if idx == -1:
       # There was no previous track, so we instantiate a new track
-      tracks.append(Track(all_boxes, all_keypoints, i, t))
+      tracks.append(Track(all_boxes, all_keypoints, t, i))
     else:
       # Update the track with the new data
       track = tracks[idx]
-      track.update(i, t)
-
+      track.update(t, i)
 
 def run_tracker(all_boxes, all_keypoints, max_age, matching_algo="greedy", 
                 cost_types=[CostTypes.IOU], cost_weights=[1.0], use_kf=True):
@@ -888,7 +890,7 @@ def run_tracker(all_boxes, all_keypoints, max_age, matching_algo="greedy",
     matches = compute_matches(tracks, i, max_age, cur_boxes, cur_kpts,
                               cost_types, cost_weights, matching_algo, use_kf=use_kf)
     update_tracks(tracks, matches, i, all_boxes, all_keypoints)
-  
+
   arr_tracks = []
   for track in tracks:
     arr_tracks.append(track.get_full_track())
@@ -906,7 +908,6 @@ def get_tracks(all_predictions):
         boxes = np.asarray(instances.pred_boxes.tensor)
         all_keypoints.append(keypoints)
         all_boxes.append(boxes)
-
     cost_types = [
 		  CostTypes.IOU,
 		  CostTypes.KEYPOINT_THRESHOLDING,

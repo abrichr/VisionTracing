@@ -8,7 +8,7 @@ from rq import Worker, Queue, Connection
 listen = ['high', 'default', 'low']
 
 redis_url = os.getenv('REDIS_URL')
-print("Redis {}".format(redis_url))
+logger.info("REDIS URL {}".format(redis_url))
 
 conn = redis.from_url(redis_url)
 

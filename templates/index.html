@@ -3,6 +3,22 @@
 
 <head>
 
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=UA-166920629-3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'UA-166920629-3');
+  </script>
+
+  <script>
+    // temporary until Heroku bug gets sorted out
+    if (window.location.href.includes('heroku')) {
+      window.location.replace('http://ec2-3-237-25-198.compute-1.amazonaws.com:5000/');
+    }
+  </script>
+
   <title>
     Contact Tracing AI - Tracking Demo
   </title>
@@ -28,7 +44,8 @@
   <script>
     Dropzone.autoDiscover = false
   </script>
-
+  <link rel="stylesheet" type="text/css" href="/static/css/lib/spin.css">
+  <link rel="stylesheet" type="text/css" href="/static/css/lib/style.css">
 </head>
 
 <style>
@@ -70,8 +87,17 @@
     <h1 class="ui header">
       Tracking Demo
     </h1>
-
-    <p>Drag and drop or click to upload a video file for analysis.</p>
+    <ol>
+      <li>
+        Click <a href="/static/sample_video.mp4" download>here</a> to download a sample video.
+      </li>
+      <li>
+        Drag & drop the downloaded video into the rectangle below (or click on the rectangle to upload).
+      </li>
+      <li>
+        Wait until the video has been processed. Progress information will be posted to the screen.
+      </li>
+    </ol>	
 
     <div id="dropzone">
       <form class="dropzone needsclick" id="file-upload" action="/upload">
@@ -79,30 +105,21 @@
           Drop files here or click to upload.
         </div>
       </form>
-    </div>
-
-    {% if jobs %}
+    </div>    
+    {% set session_is_empty = session|empty_session %}
+    {% if not session_is_empty %}
       <h3>Videos</h3>
-      <p>Refresh the page to update.</p>
-      <ul>
-        {% for job in jobs %}
-          <li>
-            <ul>
+        {% for job_dict in session['jobs'] %}
+	<ul style="list-style-type:none;">
               <li>
-                filename: {{ job.filename }}
+              {{ job_dict | refresh_job }}
               </li>
-              <li>
-                is_finished: {{ job.is_finished }}
-              </li>
-              <li>
-                result: {{ job.result }}
-              </li>
+	      <li id="{{ job_dict['id'] }}">
+              {{ job_dict | display_job }}
+	      </li>
             </ul>
-          </li>
         {% endfor %}
-      </ul>
     {% endif %}
-
 
   </div>
 
@@ -131,8 +148,9 @@
     url: '{{ url_for('upload') }}',
     paramName: "file", // The name that will be used to transfer the file
     acceptedFiles: 'video/*',
+    parallelUploads: 1,
     success: function(file, response) {
-      console.log('success, file:', file, 'response:', response)
+      console.log('success, file:', file, 'response:', response);
       Turbolinks.visit(location.toString());
     },
     timeout: 120000,
@@ -145,5 +163,53 @@
   });
 
   </script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+  <script type='module'>
+    import { Spinner } from '/static/js/lib/spin.js'
+    
+    /* This block is required to add a spinner if the user refreshes and the job is not done */
+    {% for job_dict in session['jobs'] %}
+      {% set job = q.fetch_job(job_dict['id']) %}
+      {% if job and job.meta.get('status') and job.meta.get('status') != 'Done' %}
+        new Spinner().spin(document.getElementById('{{ job_dict["id"] }}'));
+      {% endif %}
+    {% endfor %}
 
+    var socket = io.connect('http://ec2-3-237-25-198.compute-1.amazonaws.com:5000/');
+    
+    /* If socket connection established correctly, logs connected */
+    socket.on('connect', function() {
+      console.log('Connected');
+    });
+
+    /* If client receives a progress display event, the progress display message is 
+       updated
+    */
+    socket.on('progress display', function(job) {
+      var job_status = job.status;
+      var job_id = job.id;
+      var job_fname = job.fname;
+
+      console.log(job_status);
+      console.log(job_id);
+      if (typeof status === 'undefined') {
+        var innerHTML = 'Beginning process...';
+      } else {
+        var innerHTML =  job_status;
+      }
+      if (innerHTML === 'Done') { /* Displays video to the UI if job is done */
+        document.getElementById(job_id).innerHTML = `
+        <video width="320" height="240" controls>
+          <source src="/static/videos/${job_fname}" type="video/mp4">
+        </video>
+        `;
+      } else { /* If job is not finished, attach a spinner next to the job in the UI */
+        var target = document.getElementById(job_id);
+        target.innerHTML = innerHTML;
+        new Spinner().spin(target);
+      }
+      console.log('Changed div ' + job_id);  
+    });
+  </script>
 </body>
